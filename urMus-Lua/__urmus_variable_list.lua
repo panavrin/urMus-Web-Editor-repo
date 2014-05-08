@@ -221,6 +221,9 @@ if __urMus__chat__username == nil then
         __urMus__chat__username[username] = true
         rawset(_G,"__"..username,{})
         setmetatable(_G["__"..username],metatable_for_namespaces)
+        rawset(_G["__"..username],"__newindex__list",{})
+        rawset(_G["__"..username],"__newindex__length", 0)
+          
         __urMus__chat__index_for_new_join = __urMus__chat__index;
         __urMus_chat_post_message(username, " joined.", "join");
         NPrint(TableToXml(__urMus__chat__username));
@@ -351,6 +354,7 @@ if __urMus__chat__username == nil then
 
     default_metatable_for_table = {
         __newindex = function (t,k,v)
+            -- t:table, k:index, v:value
             if type(v) == "table" then
             --    DPrint("setting metatable of "..k)
                 __setmetatable(v)
@@ -361,6 +365,8 @@ if __urMus__chat__username == nil then
             end
             
             if  (string.find(k,"__urMusReturn")== nil)then -- due to __urmusReturn
+                --__urMus_chat_post_message("log2","*update ".. tostring(t).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
+
                 t.__newindex__length = t.__newindex__length + 1
                 t.__newindex__list[t.__newindex__length] = k
           --      DPrint("*update of element " .. tostring(k) .." to " .. tostring(v))
@@ -371,19 +377,20 @@ if __urMus__chat__username == nil then
     }
 
     metatable_for_namespaces = {
+    -- if index is accessible in _G, you should access the other t
+
         __index = _G,
         __newindex = function (t,k,v)
+            if _G[k]~=nil then
+                _G[k] = v
+                return
+            end
             if type(v) == "table" then
                 --DPrint("setting metatable of "..k)
                 __setmetatable(v)
             end
-            if rawget(t,"__newindex__list") == nil then
-                rawset(t,"__newindex__list",{})
-                rawset(t,"__newindex__length", 0)
-            end
-            
             if  (string.find(k,"__urMusReturn")== nil)then -- due to __urmusReturn
-                --DPrint("*update ".. tostring(getmetatable(t)).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
+                --__urMus_chat_post_message("log1","*update ".. tostring(getmetatable(t)).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
                 rawset(t,"__newindex__length",rawget(t,"__newindex__length") + 1)
                 t.__newindex__list[t.__newindex__length] = k
             end
@@ -430,7 +437,6 @@ if __urMus__chat__username == nil then
             end
             if type(var.__newindex__list[i]) ~= "string" and type(var.__newindex__list[i]) ~= "number"  then
                 error("__newindex_table_to_xml error:var.__newindex__list[i] is "..type(var.__newindex__list[i]).." type.")
-
             end
             returnStr = returnStr.. "<e><k>"..i.."</k><kt>number</kt><t>"..type(var.__newindex__list[i]).."</t><v>"..var.__newindex__list[i].."</v></e>\n"
         end

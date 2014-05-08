@@ -542,7 +542,8 @@ $(document).ready(function () {
       )
       return;
 
-    }
+    } // end of     if ( lostConnection == true)
+
     if (!chatboxState){
       ajax_run_code('NPrint(ElemToXml(__urMus__chat__index_for_new_join))')
       .done(function (data,status, xhr) {
@@ -566,7 +567,8 @@ $(document).ready(function () {
       });
 
       return;
-    }
+    } // end of if (!chatboxState){
+
       
 
     count++;
@@ -582,6 +584,8 @@ $(document).ready(function () {
       var something= xhr.responseXML.getElementsByTagName("chat");
       var shared = false;
 
+      if ( something.length >1)
+        shared = false;
       for (var i=0; i< something.length; i++){
         var element  = xhr.responseXML.getElementsByTagName("chat")[i];
         var type = element.getElementsByTagName("t")[0].firstChild.nodeValue;
@@ -592,8 +596,8 @@ $(document).ready(function () {
         displayed_chat_index  = index;
      //   if (user != screen_name)
 
-        for (var i=0; i< tabIndexMap.length; i++){
-          var logTab = tabIndexMap[i]; // => 0
+        for (var j=0; j< tabIndexMap.length; j++){
+          var logTab = tabIndexMap[j]; // => 0
           if ( tabLabels[logTab].indexOf("history_") !=-1)
           {
             var dt = new Date();
@@ -610,8 +614,10 @@ $(document).ready(function () {
           $("#chat_div").chatbox("option", "boxManager").addMsg(false, user + message, "#009600");
           if (user != screen_name)
             updateVariableList(true, "__"+user);
-          if ($('#table__G').length > 0)
-            updateVariableList(true, "_G");
+          if ($('#table__G').length > 0){
+              updateVariableList(true, "_G");
+          }
+            
 
         }else if (type == "join"){
           $("#chat_div").chatbox("option", "boxManager").addMsg(false, user + message, "#969600");
@@ -624,7 +630,6 @@ $(document).ready(function () {
             addVTab("__" + user,user );
             updateVariableList(true, "__"+user);
           }
-
         }else if (type == "share"){
           shared = true;
           $("#chat_div").chatbox("option", "boxManager").addMsg(false, user + message, "#004596");
@@ -639,7 +644,6 @@ $(document).ready(function () {
           $("#chat_div").chatbox("option", "boxManager").addMsg(false, user + message, "#009696");
         }else{
           $("#chat_div").chatbox("option", "boxManager").addMsg(false, user + message, "#960045");
-
         }
 
        
@@ -1164,19 +1168,19 @@ $(document).ready(function () {
       var target_namespace = namespace_setfenv.replace(/#\{namespace\}/g, "__" + screen_name)
       ajax_run_code("__urMus_chat_post_message(\""+screen_name+"\", \" shared an expression "+key+".\",\"share_expression\",\"" +  key + "\")");
     });
-
+    var childrenNum = 0;
     $("tr.element").each(function() {
       var tr = $(this);
       var checked = tr.find("input[type=checkbox]").is(":checked");
       var key = tr.attr("key");
       var depth = parseInt(tr.data('depth'));
       var keyType = tr.attr("keyType");
+      var type = tr.attr("type");
       if ( checked == false)
         return;
-      if (depth != 2){
-        alert("You can only share variables in top level.");
-        tr.find("input[type=checkbox]").prop("checked", false);
-
+      if ( childrenNum >0)
+      {
+        childrenNum--;
         return;
       }
       if (tr.attr("id").indexOf("__"+screen_name) != 0){
@@ -1184,17 +1188,32 @@ $(document).ready(function () {
         tr.find("input[type=checkbox]").prop("checked", false);
         return;
       }
-      
+      if (depth > 2){
+        alert("You can only share variables in top level.");
+        tr.find("input[type=checkbox]").prop("checked", false);
+        return;
+      }
+      if ( depth == 1)
+        return;
+
+      /*
       if (at_least_one_checked ) 
       {
+
         alert("Share only one variable at a time");
         return;
       }
-
+*/
       at_least_one_checked = true;
       if (keyType == "string")
         quoted_key = "\"" + key + "\"";
-
+      if (type == "table")
+      {
+        var children = findChildren(tr);
+        childrenNum = children.length;
+        children.remove();
+      }
+        
       ajax_run_code('__urMus_share_variable(__'+screen_name+','+quoted_key + ')')
       .done(function(){
         tr.remove();
@@ -1203,11 +1222,8 @@ $(document).ready(function () {
 
       });
       
-
     });
-    if(at_least_one_checked){
-   //   updateVariableList(true, "_G");
-    }
+   
   });
 
   $('#table_clean_button').button().click(function(){
