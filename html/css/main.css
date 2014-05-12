@@ -47,6 +47,17 @@ body {
   height: 300px;
   width:100%;
 }
+
+.runicon{
+    position:absolute;
+    width:243px;
+    height:241px;
+    top:50%;
+    left:50%;
+    margin-top:-120px; /* negative half the size of height */
+    margin-left:-120px; /* negative half the size of width */
+}
+
 .toolbar {
     padding: 4px;
     display: inline-block;

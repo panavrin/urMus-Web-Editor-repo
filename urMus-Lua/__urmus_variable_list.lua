@@ -365,7 +365,7 @@ if __urMus__chat__username == nil then
             end
             
             if  (string.find(k,"__urMusReturn")== nil)then -- due to __urmusReturn
-                --__urMus_chat_post_message("log2","*update ".. tostring(t).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
+           --     __urMus_chat_post_message("log2","*update ".. tostring(t).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
 
                 t.__newindex__length = t.__newindex__length + 1
                 t.__newindex__list[t.__newindex__length] = k
@@ -390,7 +390,7 @@ if __urMus__chat__username == nil then
                 __setmetatable(v)
             end
             if  (string.find(k,"__urMusReturn")== nil)then -- due to __urmusReturn
-                --__urMus_chat_post_message("log1","*update ".. tostring(getmetatable(t)).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
+             --   __urMus_chat_post_message("log1","*update ".. tostring(getmetatable(t)).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
                 rawset(t,"__newindex__length",rawget(t,"__newindex__length") + 1)
                 t.__newindex__list[t.__newindex__length] = k
             end

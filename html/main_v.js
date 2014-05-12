@@ -59,6 +59,7 @@ $(window).bind('onunload',function(){
 $(document).ready(function () {
   
   var namespace_setfenv = "setfenv(1, #{namespace})\n"; 
+  $( "div.runicon" ).hide();
 
   //jQuery.makeArray();
   liveTabCounter = 0;
@@ -530,7 +531,8 @@ $(document).ready(function () {
         while(trNext.length > 0){
           trCur = trNext;
           trNext = trNext.next();
-          trCur.remove();
+          removeEntry(trCur);
+
         }
        // $('#table___'+screen_name).find("tr:first").attr("newindex",0);
        // updateVariableList(true,"__" + screen_name);
@@ -633,6 +635,9 @@ $(document).ready(function () {
         }else if (type == "share"){
           shared = true;
           $("#chat_div").chatbox("option", "boxManager").addMsg(false, user + message, "#004596");
+          if ( user != screen_name){
+            removeSharedVariables(user);
+          }
         }
         else if (type == "remote"){
           $("#chat_div").chatbox("option", "boxManager").addMsg(false, user + message, "#960096");
@@ -668,7 +673,9 @@ $(document).ready(function () {
   // end of chat interface
 
   function run_code_in_editor() {
-    selected = tabIndexMap[tabs.tabs('option', 'selected')-1]; // => 0
+    $( "div.runicon" ).show();
+    $( "div.runicon" ).fadeOut(1200);
+    var selected = tabIndexMap[tabs.tabs('option', 'selected')-1]; // => 0
    // sanglog
     for (var i=0; i< tabIndexMap.length; i++){
       var logTab = tabIndexMap[i]; // => 0
@@ -684,7 +691,8 @@ $(document).ready(function () {
     }
     
     var target_namespace = namespace_setfenv.replace(/#\{namespace\}/g, "__" + screen_name)
-    ajax_run_code(target_namespace + cm[selected].getSelection())
+    var codeStr = cm[selected].getSelection();
+    ajax_run_code(target_namespace + codeStr)
     .done( function (data,status, xhr) {
         msg('success', "Ran \"" + cm[selected].getSelection().substring(0,20) + "...\" : " + xhr.responseText);
         updateVariableList(true,"__" + screen_name);
@@ -761,6 +769,60 @@ $(document).ready(function () {
   }
   */
 
+  function removeSharedVariables(user){
+
+    $("tr.element[namespace=__" + user + "]").each(function() {
+      var tr = $(this);
+      var depth = tr.data('depth');
+      var key = tr.attr("key");
+      var keyType = tr.attr("keytype");
+      var namespace = tr.attr("namespace")
+      if ( depth == 2 ){ // this is to remove entries that are shared by others (not me)
+        if (keyType == "string"){
+          ajax_run_code('NPrint(ElemToXml(rawget('+namespace+','+'"'+key+'"'+')))')
+            .done(function (data,status, xhr) {
+              var element = xhr.responseXML.getElementsByTagName("e")[0];
+              var type = element.getElementsByTagName("t")[0].firstChild.nodeValue;
+              if ( type == "nil"){
+                var trs = findChildren(tr)
+                removeEntries(trs);
+                removeEntry(tr);
+                return;
+              }
+            });
+        } else if (keyType == "number"){
+          ajax_run_code('NPrint(ElemToXml(rawget('+namespace+','+key+'))')
+          .done(function (data,status, xhr) {
+            var element = xhr.responseXML.getElementsByTagName("e")[0];
+            var type = element.getElementsByTagName("t")[0].firstChild.nodeValue;
+            if ( type == "nil"){
+              var trs = findChildren(tr)
+              removeEntries(trs);
+              removeEntry(tr);
+              return;
+            }
+          });
+        }
+        else {
+          alert("ASSERT( keyType should be eitehr string or number :" + keyType);
+        }
+     }
+    });
+  }
+
+  function removeEntries(trs){
+    trs.each(function(){
+      var tr = $(this);
+      removeEntry(tr);
+    });
+
+  }
+  function removeEntry(tr){
+    if ( tr.find('a.livebutton').hasClass("down"))
+      tr.find('a.livebutton').removeClass("down");
+    tr.remove();
+  }
+
   function updateOneTr(tr){
     var _id = tr.attr("id");
     var depth = tr.data('depth');
@@ -773,19 +835,20 @@ $(document).ready(function () {
     if (exp)
       target_namespace = namespace_setfenv.replace(/#\{namespace\}/g, namespace);  
 
-
    // ajax_run_code('NPrint(ElemToXml('+_id+'))')
    // .done()
+   
     ajax_run_code(target_namespace + 'NPrint(ElemToXml('+_id+'))')
     .done(function (data,status, xhr) {
       var element = xhr.responseXML.getElementsByTagName("e")[0];
       var type = element.getElementsByTagName("t")[0].firstChild.nodeValue;
       var value = "";
       if ( type == "nil"){
-        if ( tr.find('a.livebutton').hasClass("down"))
-          tr.find('a.livebutton').removeClass("down");
-        tr.remove();
+        removeEntry(tr);
         return;
+      }
+      if (type == "table"){
+        
       }
       var live = false;
 
@@ -804,9 +867,16 @@ $(document).ready(function () {
       }
       else
       {
+      //  if (element.getElementsByTagName("v").children().length == 0)
+      //    alert("this is null : " + xhr.responseText);
+      try {
         if ( element.getElementsByTagName("v")[0].firstChild.nodeValue != "null")
           value = " : "+  element.getElementsByTagName("v")[0].firstChild.nodeValue;
-        strRow +="<span class=\"tree\"></span>";
+          strRow +="<span class=\"tree\"></span>";
+        }
+        catch(err){
+          alert("caught error : " + xhr.responseText);
+        }
       }
       strRow += "<input type = \"checkbox\" keytype = \"" + keyType + "\" id =\"checkbox_"+_id;
       strRow +="\">"
@@ -816,12 +886,12 @@ $(document).ready(function () {
         strRow +=key;
       strRow += " ("+type+")";//
       if (type == "number" || type == "string" || type == "boolean"){
-        strRow += "  <a urmusid = \""+_id+"\" class = \"livebutton " + "\" namespace = \"" + namespace +"\"";
+        strRow += "  <a urmusid = \""+_id+"\" class = \"livebutton ";
         if ( tr.find('a.livebutton').hasClass("down")){
           strRow += "down";
           live= true;
         }
-        strRow +="\">Live</a>";
+        strRow += "\" namespace = \"" + namespace +"\"" + "\">Live</a>";
       }
       strRow += "<span class = \"urmus_value\">";
       strRow += value;
@@ -834,13 +904,12 @@ $(document).ready(function () {
      //   tr.next().hide();
       if(live)
         poll(tr.next().find('a.livebutton'));
-      tr.remove();
+      removeEntry(tr);
+
     })
     .fail(function (xhr, opts, errorThrown) {
       if (xhr.responseText.indexOf("attempt to index field") >= 0){
-        if ( tr.find('a.livebutton').hasClass("down"))
-          tr.find('a.livebutton').removeClass("down");
-        tr.remove();
+        removeEntry(tr);
         msg('error', "UpdateOneTr() error1: " + xhr.responseText);
 
       }
@@ -1045,12 +1114,16 @@ $(document).ready(function () {
     
   function poll(lb){
     setTimeout(function(){
-
-      var target_namespace = namespace_setfenv.replace(/#\{namespace\}/g, lb.attr("namespace"));  
-
-      _id = lb.attr("urmusid");
       if (!lb.hasClass('down'))
         return;
+
+      if (lb.is(":hidden")){ // if it's removed, quit updates.
+   
+        poll(lb);
+        return;
+      }
+      var target_namespace = namespace_setfenv.replace(/#\{namespace\}/g, lb.attr("namespace"));  
+      var _id = lb.attr("urmusid");
 
       $.ajax({
         type: 'GET',
@@ -1070,10 +1143,7 @@ $(document).ready(function () {
         msg("error", "update failed :" + _id);
         lb.toggleClass('down');
       });
-      if (lb.is(":hidden")){ // if it's removed, quit updates.
-        lb.toggleClass("down");
-        return;
-      }
+      
     }, 50);
   }
 
@@ -1159,7 +1229,7 @@ $(document).ready(function () {
       }
 
       if (checked)
-        tr.remove();
+        removeEntry(tr);
       else
         return;
 
@@ -1178,11 +1248,13 @@ $(document).ready(function () {
       var type = tr.attr("type");
       if ( checked == false)
         return;
+
       if ( childrenNum >0)
       {
         childrenNum--;
         return;
       }
+      
       if (tr.attr("id").indexOf("__"+screen_name) != 0){
         alert("You can only share variables from your namespace.");
         tr.find("input[type=checkbox]").prop("checked", false);
@@ -1196,7 +1268,7 @@ $(document).ready(function () {
       if ( depth == 1)
         return;
 
-      /*
+      /* 
       if (at_least_one_checked ) 
       {
 
@@ -1211,12 +1283,12 @@ $(document).ready(function () {
       {
         var children = findChildren(tr);
         childrenNum = children.length;
-        children.remove();
+        removeEntries(children)
       }
         
       ajax_run_code('__urMus_share_variable(__'+screen_name+','+quoted_key + ')')
       .done(function(){
-        tr.remove();
+        removeEntry(tr);
         msg('success', "The variable <i>" + key + "</i> is shared.");
         ajax_run_code("__urMus_chat_post_message(\""+screen_name+"\", \" shared a variable "+key+".\",\"share\")");
 
@@ -1232,7 +1304,8 @@ $(document).ready(function () {
       var tr = $(this);
       var checked = tr.find("input[type=checkbox]").is(":checked");
       if (checked)
-        tr.remove();
+        removeEntry(tr);
+
       at_least_one_checked = true;
     });
     
@@ -1268,12 +1341,8 @@ $(document).ready(function () {
             return;
           }
         });
-        children.remove();
-        children.each(function(){
-          _tr = $(this);
-          if ( _tr.find('a.livebutton').hasClass("down"))
-          _tr.find('a.livebutton').removeClass("down");
-        });
+        
+        removeEntries(children);
       }
 
       $.ajax({
@@ -1291,10 +1360,8 @@ $(document).ready(function () {
           return;
         }
       });
-      if ( tr.find('a.livebutton').hasClass("down"))
-        tr.find('a.livebutton').removeClass("down");
+      removeEntry(tr);
 
-      tr.remove();
     });
     if (!at_least_one_checked)
       alert("Check variables to be nullified.");
