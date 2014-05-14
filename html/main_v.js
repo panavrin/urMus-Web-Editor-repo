@@ -809,7 +809,6 @@ $(document).ready(function () {
      }
     });
   }
-
   function removeEntries(trs){
     trs.each(function(){
       var tr = $(this);
@@ -821,6 +820,7 @@ $(document).ready(function () {
     if ( tr.find('a.livebutton').hasClass("down"))
       tr.find('a.livebutton').removeClass("down");
     tr.remove();
+ //   alert("removing" + tr.attr("id"));
   }
 
   function updateOneTr(tr){
@@ -848,7 +848,7 @@ $(document).ready(function () {
         return;
       }
       if (type == "table"){
-        
+
       }
       var live = false;
 
@@ -910,12 +910,12 @@ $(document).ready(function () {
     .fail(function (xhr, opts, errorThrown) {
       if (xhr.responseText.indexOf("attempt to index field") >= 0){
         removeEntry(tr);
-        msg('error', "UpdateOneTr() error1: " + xhr.responseText);
-
-      }
+//        msg('error', "UpdateOneTr() error1: " + xhr.responseText);
+    }
       else{
         msg('error', "UpdateOneTr() error2: " + xhr.responseText);
       }
+      return;
     });
   }
 
@@ -932,12 +932,13 @@ $(document).ready(function () {
         2. see if __newindex__length exists 
         3. return __newindex__length. 
     */
+    var codeStr2 = 'NPrint(ElemToXml('+_id+'==nil or '+_id+'.__newindex__length==nil))';
     $.ajax({ // see if _id exists 
       async: false,
       type: 'GET',
       url: '/eval',
       data: {
-        code: 'NPrint(ElemToXml('+_id+'==nil))'
+        code: 'NPrint(ElemToXml('+_id+'==nil or '+_id+'.__newindex__length==nil))'
       },
       success:  function(data, status, xhr)  {
         exists = xhr.responseXML.getElementsByTagName("e")[0].getElementsByTagName("v")[0].firstChild.nodeValue;
@@ -948,7 +949,7 @@ $(document).ready(function () {
       }
     });
     if (exists == "true"){
-      msg('error', "Error:" + _id+ " does not exists.");
+      alert("Error:" + _id+ " does not exists.");
       return;
     }
 
@@ -957,20 +958,25 @@ $(document).ready(function () {
       type: 'GET',
       url: '/eval',
       data: {
-        code: 'NPrint(ElemToXml('+_id+'.__newindex__length==nil))'
+        code: 'NPrint(ElemToXml('+_id+'.__newindex__replaced))'
       },
       success:  function(data, status, xhr)  {
         exists = xhr.responseXML.getElementsByTagName("e")[0].getElementsByTagName("v")[0].firstChild.nodeValue;
+        if ( exists == "true") {
+          newindex = 0;
+          var trs = findAllChildren(tr);
+          removeEntries(findAllChildren(tr))
+          //          alert("allChildren:" + trs.length);
+
+        }
       },
       error: function (xhr, opts, errorThrown) {
         msg('error', "Error5:" + xhr.responseText + ":" + errorThrown);
         return;
       }
     });
-    if (exists == "true"){
-      return;
-    }
-    
+
+   
     $.ajax({
       async: false,
       type: 'GET',
@@ -1049,6 +1055,14 @@ $(document).ready(function () {
    }));
   }
 
+  function findAllChildren(tr) {
+    var depth = tr.data('depth');
+    return tr.nextUntil($('tr').filter(function () {
+     return $(this).data('depth') <= depth;
+   }));
+  }
+
+
   function removeHighlight() {
       setTimeout(function() {
         $( "#effect" ).removeAttr( "style" ).hide().fadeIn();
@@ -1065,6 +1079,8 @@ $(document).ready(function () {
 
     $("tr.element[namespace=" + namespace + "]").each(function() {
       var tr = $(this);
+      if (tr.is(":hidden"))
+        return;
       var namespace2 = tr.attr("namespace");
       if ( namespace != namespace2)
         msg("error", "namespace errror baby(" + namespace + "," + namespace2+")");

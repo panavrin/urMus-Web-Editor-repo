@@ -19,6 +19,17 @@ if __urMus__chat__username == nil then
     function dofile() 
         error("Do not use dofile. ", 2)
     end
+    rawpairs = pairs
+    function pairs(t)
+        local k = nil
+        return
+        function ()
+            local v
+            repeat k,v=next(t,k) until string.find(tostring(k),"__newindex__")== nil or k==nil
+           -- DPrint("namespace pairs:"..tostring(k)..","..tostring(v))
+            return k,v
+        end
+    end
 
     function __fadeout__ChatBox(self, elapsed)
         if self.fadeOutStartTime > Time() then
@@ -220,9 +231,10 @@ if __urMus__chat__username == nil then
         end
         __urMus__chat__username[username] = true
         rawset(_G,"__"..username,{})
-        setmetatable(_G["__"..username],metatable_for_namespaces)
         rawset(_G["__"..username],"__newindex__list",{})
         rawset(_G["__"..username],"__newindex__length", 0)
+        rawset(_G["__"..username],"__newindex__table", {})
+        setmetatable(_G["__"..username],metatable_for_namespaces)
           
         __urMus__chat__index_for_new_join = __urMus__chat__index;
         __urMus_chat_post_message(username, " joined.", "join");
@@ -302,8 +314,10 @@ if __urMus__chat__username == nil then
         if _G[key] ~= nil then
             error("Variable name("..key..")has a conflict to be shared in the global namespace")
         end
-        _G[key] = namespace[key]
+        local temp = namespace[key]
         namespace[key] = nil
+        _G[key] = temp -- this order matters! 
+--DPrint("key:" .. key .. " _G[key]:".. tostring(_G[key]).. " namespace[key]:"..tostring(namespace[key]))
     end
 
     function __urMus_chat_get_message_in_xml(client, index)
@@ -333,19 +347,21 @@ if __urMus__chat__username == nil then
 
     function __setmetatable(v)
         if v["__newindex__list"] == nil then
+           -- DPrint("2: setting_metaTable"..tostring(v))
             rawset(v,"__newindex__list",{})
+            rawset(v,"__newindex__table",{})
             rawset(v,"__newindex__length", 0)
+            rawset(v,"__newindex__replaced",true)
+     --       DPrint("adding "..tostring(v).." to the metatable")
             if type(v[0]) ~= "userdata" then
                 for key, val in pairs(v) do
                   --  DPrint("adding "..key.." to the metatable")
-                    if string.find(key,"__newindex__") == nil then
-                        v.__newindex__length = v.__newindex__length + 1
-                        v.__newindex__list[v.__newindex__length] = key
-                        if type(val) == "table" then
-                            __setmetatable(val)
-                        end
+                    v.__newindex__length = v.__newindex__length + 1
+                    v.__newindex__list[v.__newindex__length] = key
+                    if type(val) == "table" then
+                        __setmetatable(val)
                     end
-                    
+                    v.__newindex__table[key] = val;
                 end
             end
         end
@@ -353,55 +369,89 @@ if __urMus__chat__username == nil then
     end
 
     default_metatable_for_table = {
+        __index = function (t,k)
+   --         DPrint("__index t:".. tostring(t).. " k:"..k)
+            if string.find(k,"__newindex__") == nil and rawget(t,"__newindex__table") ~= nil and rawget(rawget(t,"__newindex__table"),k)~=nil then  
+                return rawget(t,"__newindex__table")[k]
+            end
+            return rawget(t,k)
+        end,
         __newindex = function (t,k,v)
             -- t:table, k:index, v:value
             if type(v) == "table" then
-            --    DPrint("setting metatable of "..k)
+              --     DPrint("1: setting metatable of "..k)
                 __setmetatable(v)
             end
-            if t["__newindex__list"] == nil then
-                rawset(t,"__newindex__list",{})
-                rawset(t,"__newindex__length", 0)
+             if  (string.find(k,"__urMusReturn")== nil) then -- due to __urmusReturn
+                if rawget(t.__newindex__table,k) ==nil then
+                    t.__newindex__length = t.__newindex__length + 1
+                    t.__newindex__list[t.__newindex__length] = k
+                elseif rawget(t.__newindex__table,k) ~=nil and type(t[k]) == "table" then  -- a table is overwritten 
+                    t[k].__newindex__length = 0
+                    t[k].__newindex__replaced = true
+                end
+            -- DPrint("111 update of element " .. tostring(k) .." to " .. tostring(v) .. "in t:".. tostring(t))
             end
-            
-            if  (string.find(k,"__urMusReturn")== nil)then -- due to __urmusReturn
-           --     __urMus_chat_post_message("log2","*update ".. tostring(t).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
-
-                t.__newindex__length = t.__newindex__length + 1
-                t.__newindex__list[t.__newindex__length] = k
-          --      DPrint("*update of element " .. tostring(k) .." to " .. tostring(v))
-            end
-            rawset(t,k,v)
+            rawset(t.__newindex__table,k,v)
         end
-        
+        --[[,
+        __pairs=
+        function (t)
+            local k=nil
+            return
+            function ()
+                local v
+                repeat k,v=next(t,k) until string.find(k,"__newindex__")== nil or k==nil
+                    DPrint("table pairs:"..k..","..tostring(v))
+                return k,v
+            end
+        end]]
     }
 
     metatable_for_namespaces = {
     -- if index is accessible in _G, you should access the other t
+        __index = function (t,k)
+            if t == _G then
+                error("_G is indexed")
+            end
 
-        __index = _G,
+            if string.find(k,"__newindex__") == nil then
+                --DPrint("6 t:"..tostring(t).." k:"..k)
+                -- if you can't find one in the namespace
+                -- find it in the global namespace
+                if rawget(rawget(t,"__newindex__table"),k) == nil then
+                  --  DPrint("7 t:"..tostring(t).." k:"..k .. " _G[k] : ".._G[k])
+                    return _G[k] -- this should not be rawget
+                end
+                --DPrint("8 t:"..tostring(t).." k:"..k .. " var:"..tostring(rawget(rawget(t,"__newindex__table"),k)))
+                return rawget(rawget(t,"__newindex__table"),k) -- this is typical variables in the namespace
+            end
+            return rawget(t,k) -- this is variables with prefix __newindex__
+        end,
         __newindex = function (t,k,v)
-            if _G[k]~=nil then
+            if _G[k]~=nil then -- this is the only differnece 
                 _G[k] = v
                 return
             end
             if type(v) == "table" then
-                --DPrint("setting metatable of "..k)
                 __setmetatable(v)
             end
-            if  (string.find(k,"__urMusReturn")== nil)then -- due to __urmusReturn
+            if  (string.find(k,"__urMusReturn")== nil) and rawget(t.__newindex__table,k) == nil then -- due to __urmusReturn
              --   __urMus_chat_post_message("log1","*update ".. tostring(getmetatable(t)).." of element " .. tostring(k) .." to " .. tostring(v) .. "("..tostring(rawget(t,"__newindex__length"))..","..tostring(rawget(t,"__newindex__list"))..")")
-                rawset(t,"__newindex__length",rawget(t,"__newindex__length") + 1)
-                t.__newindex__list[t.__newindex__length] = k
+                if  rawget(t.__newindex__table,k) ~=nil and type(t[k]) == "table" then -- if you replace existing variables in the namespace 
+                    t[k].__newindex__length = 0
+                    t[k].__newindex__replaced = true
+                elseif rawget(t.__newindex__table,k) ==nil then --- this is typical case
+                    t.__newindex__length = t.__newindex__length + 1
+                    t.__newindex__list[t.__newindex__length] = k
+                end
             end
-            rawset(t,k,v)
+            rawset(t.__newindex__table,k,v)
         end
-        
     }
 
     function __nullify(var,key)
         --DPrint("__nullify start.."..tostring(var))
-        
         if type(var) == "table" then
             if key then
                 if type(var[key]) == "table" then
@@ -409,7 +459,7 @@ if __urMus__chat__username == nil then
                 end
                 var[key] = nil
             else
-                for k,v in pairs(var) do
+                for k,v in rawpairs(var) do
                     if type(var[k]) == "table" then
                         __nullify(var[k])
                     end
@@ -440,9 +490,13 @@ if __urMus__chat__username == nil then
             end
             returnStr = returnStr.. "<e><k>"..i.."</k><kt>number</kt><t>"..type(var.__newindex__list[i]).."</t><v>"..var.__newindex__list[i].."</v></e>\n"
         end
+        if var.__newindex__replaced ~= nil then var.__newindex__replaced = false end
         return returnStr.."</lua_table>"
     end
-
+    rawset(_G,"__newindex__table",{})
+    rawset(_G,"__newindex__list",{})
+    rawset(_G,"__newindex__length", 0)
+                
     setmetatable(_G, default_metatable_for_table)
 
 end
